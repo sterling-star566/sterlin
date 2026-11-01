@@ -1,0 +1,35 @@
+name: Build Sterling
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: Accept SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+      - name: Download Needle 3 (engine + model)
+        continue-on-error: true
+        run: |
+          set -e
+          mkdir -p app/src/main/cpp/needle app/src/main/assets
+          B=https://huggingface.co/Cactus-Compute/needle3/resolve/main
+          curl -fL "$B/android-arm64/libneedle.a" -o app/src/main/cpp/needle/libneedle.a
+          curl -fL "$B/android-arm64/needle.h" -o app/src/main/cpp/needle/needle.h
+          F=$(curl -fsSL https://huggingface.co/api/models/Cactus-Compute/needle3 | python3 -c "import sys,json;print(next(s['rfilename'] for s in json.load(sys.stdin)['siblings'] if s['rfilename'].endswith('.cact') and 'whistle' not in s['rfilename']))")
+          echo "model file: $F"
+          curl -fL "$B/$F" -o app/src/main/assets/needle3.cact
+          ls -la app/src/main/cpp/needle app/src/main/assets
+          cat app/src/main/cpp/needle/needle.h
+      - uses: gradle/actions/setup-gradle@v3
+        with: { gradle-version: 8.5 }
+      - name: Build (falls back to a no-Needle build if Needle fails to compile)
+        run: |
+          gradle assembleDebug || {
+            echo "::warning::Needle failed to build - building WITHOUT Needle. Check the log above."
+            rm -rf app/src/main/cpp/needle app/src/main/assets/needle3.cact app/.cxx
+            gradle clean assembleDebug
+          }
+      - uses: actions/upload-artifact@v4
+        with: { name: sterling-apk, path: app/build/outputs/apk/debug/app-debug.apk }

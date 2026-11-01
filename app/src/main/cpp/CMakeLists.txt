@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(sterling_needle CXX)
+set(CMAKE_CXX_STANDARD 17)
+add_library(sterling_needle SHARED jni.cpp)
+set(N ${CMAKE_CURRENT_SOURCE_DIR}/needle)
+# Needle engine (libneedle.a + needle.h) is downloaded by the GitHub workflow. Without it we build a stub.
+if(EXISTS ${N}/libneedle.a AND EXISTS ${N}/needle.h)
+  target_compile_definitions(sterling_needle PRIVATE HAVE_NEEDLE=1)
+  target_include_directories(sterling_needle PRIVATE ${N})
+  target_link_libraries(sterling_needle PRIVATE ${N}/libneedle.a)
+endif()
+target_link_libraries(sterling_needle PRIVATE log android m)
